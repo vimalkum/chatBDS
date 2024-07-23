@@ -3,4 +3,5 @@ accelerate
 streamlit
 langchain_community
 sentence-transformers
+transformers
 nltk
