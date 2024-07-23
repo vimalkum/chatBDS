@@ -72,7 +72,7 @@ if 'vectorstore' not in st.session_state:
 '''
 if 'llm' not in st.session_state:
         # Specify the model name you want to use
-    model_name = "meta-llama/Llama-2-7b-chat-hf"
+    model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
     
     # Load the tokenizer associated with the specified model
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding=True, truncation=True, max_length=512)
