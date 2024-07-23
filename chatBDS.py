@@ -26,7 +26,7 @@ import streamlit as st
 dataset_path = "/dataset/"
 modelPath = "sentence-transformers/all-MiniLM-l6-v2"
 # Create a dictionary with model configuration options, specifying to use the CPU for computations
-model_kwargs = {'device':'auto'}
+model_kwargs = {'device':'cpu'}
 # Create a dictionary with encoding options, specifically setting 'normalize_embeddings' to False
 encode_kwargs = {'normalize_embeddings': False}
 
