@@ -64,10 +64,12 @@ if 'memory' not in st.session_state:
         memory_key="history",
         return_messages=True,
         input_key="question")
+'''
 if 'vectorstore' not in st.session_state:
     st.session_state.vectorstore = FAISS(persist_directory='jj',
                                           embedding_function=load_embeddings(modelPath, model_kwargs, encode_kwargs)
                                           )
+'''
 if 'llm' not in st.session_state:
         # Specify the model name you want to use
     model_name = "meta-llama/Llama-2-7b-chat-hf"
