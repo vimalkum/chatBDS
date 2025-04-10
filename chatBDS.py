@@ -128,7 +128,7 @@ def setup_vectorstore():
 
 # Streamlit UI
 st.title("🌟 BDS Chatbot 🌟")
-st.markdown("<h3 style='color:blue;'>Your AI-powered assistant for document analysis</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color:blue;'>Your AI-powered assistant</h3>", unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
