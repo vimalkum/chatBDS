@@ -21,10 +21,10 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 # Paths
-DATASET_PATH = "/home/vkumar/code/dataset/BDS_data/"
-MODEL_PATH = "/home/vkumar/code/Models/bge-large-en-v1.5"
-MODEL_NAME = '/home/vkumar/code/Models/Marcoro14-7B-slerp/'
-FAISS_INDEX_PATH = '/home/vkumar/code/faiss_index/'
+DATASET_PATH = "./dataset/BDS_data/"
+MODEL_PATH = "./Models/bge-large-en-v1.5"
+MODEL_NAME = './Models/Marcoro14-7B-slerp/'
+FAISS_INDEX_PATH = './faiss_index/'
 
 # Model parameters
 MODEL_KWARGS = {'device': 'cuda'}
