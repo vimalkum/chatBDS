@@ -144,20 +144,17 @@ with st.sidebar:
     add_vertical_space(2)
     st.markdown("<h4 style='color:green;'>Made with ❤️ by [ChatBDS Team]</h4>", unsafe_allow_html=True)
 
-# Initialize session state
-initialize_session_state()
 
-if 'initial' not in st.session_state:
-    st.session_state.initial = True
-
-message_placeholder = st.empty()
-
-if st.session_state.initial:
+if 'qa_chain' not in st.session_state:
+    # Initialize session state
+    initialize_session_state()
     if os.path.isdir(DATASET_PATH):
         with st.status("🔍 Analyzing your document..."):
             setup_vectorstore()
     st.session_state.initial = False
-
+    
+message_placeholder = st.empty()
+    
 # Chat interaction
 if user_input := st.chat_input("📝 You:"):
     user_message = {"role": "user", "message": user_input}
