@@ -22,8 +22,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 # Paths
 DATASET_PATH = "./dataset/BDS_data/"
-MODEL_PATH = "./Models/bge-large-en-v1.5"
-MODEL_NAME = './Models/Marcoro14-7B-slerp/'
+MODEL_PATH = "BAAI/bge-large-en-v1.5"
+MODEL_NAME = 'mlabonne/Marcoro14-7B-slerp'
 FAISS_INDEX_PATH = './faiss_index/'
 
 # Model parameters
