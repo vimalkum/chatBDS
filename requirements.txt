@@ -3,6 +3,7 @@ torch
 langchain
 accelerate
 streamlit
+streamlit-extras
 langchain_community
 sentence-transformers
 transformers
