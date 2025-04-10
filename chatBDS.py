@@ -1,139 +1,117 @@
-from langchain_community.document_loaders import HuggingFaceDatasetLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+import os
+import time
+import random
+import glob
+import streamlit as st
 from transformers import AutoTokenizer, pipeline
-from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.memory import ConversationBufferMemory
 from langchain.chains import RetrievalQA
 from langchain_community.document_loaders.pdf import PyPDFLoader
-import os
-import numpy as np
-import time
-import math
-import random
-import pprint
-import nltk
-from os.path import isfile, join
-
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain_community.llms import LlamaCpp
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
 from langchain_core.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
-import streamlit as st
+from streamlit_extras.colored_header import colored_header
+from streamlit_extras.add_vertical_space import add_vertical_space
+from streamlit_extras.badges import badge
 
-dataset_path = "/dataset/"
-modelPath = "sentence-transformers/all-MiniLM-l6-v2"
-# Create a dictionary with model configuration options, specifying to use the CPU for computations
-model_kwargs = {'device':'cpu'}
-# Create a dictionary with encoding options, specifically setting 'normalize_embeddings' to False
-encode_kwargs = {'normalize_embeddings': False}
+# Set environment variables
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
-def load_embeddings(modelPath, model_kwargs, encode_kwargs):
-    # Initialize an instance of HuggingFaceEmbeddings with the specified parameters
-    embeddings = HuggingFaceEmbeddings(
-        model_name=modelPath,     # Provide the pre-trained model's path
-        model_kwargs=model_kwargs, # Pass the model configuration options
-        encode_kwargs=encode_kwargs # Pass the encoding options
+# Paths
+DATASET_PATH = "/home/vkumar/code/dataset/BDS_data/"
+MODEL_PATH = "/home/vkumar/code/Models/bge-large-en-v1.5"
+MODEL_NAME = '/home/vkumar/code/Models/Marcoro14-7B-slerp/'
+FAISS_INDEX_PATH = '/home/vkumar/code/faiss_index/'
+
+# Model parameters
+MODEL_KWARGS = {'device': 'cuda'}
+ENCODE_KWARGS = {'normalize_embeddings': False}
+
+def load_embeddings(model_path, model_kwargs, encode_kwargs):
+    """Load embeddings from HuggingFace."""
+    return HuggingFaceEmbeddings(
+        model_name=model_path,
+        model_kwargs=model_kwargs,
+        encode_kwargs=encode_kwargs
     )
 
-
-    print("\n----------------Test document Embeddings--------------------")
-    text = "This is a test document."
-    query_result = embeddings.embed_query(text)
-    #print(query_result[:3])
+def read_files(dataset_path, shuffle=False):
+    """Read and split PDF files into text chunks."""
+    files = glob.glob(dataset_path + '/**/*.pdf', recursive=True)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    docs = []
     
-    return embeddings
+    for file in files:
+        loader = PyPDFLoader(file)
+        pages = loader.load_and_split(text_splitter)
+        if shuffle:
+            random.shuffle(pages)
+        docs.extend(pages)
     
-if 'template' not in st.session_state:
-    st.session_state.template = """You are a knowledgeable chatbot, here to help with questions of the user. Your tone should be professional and informative.
+    return docs
 
-    Context: {context}
-    History: {history}
-
-    User: {question}
-    Chatbot:"""
-if 'prompt' not in st.session_state:
-    st.session_state.prompt = PromptTemplate(
-        input_variables=["history", "context", "question"],
-        template=st.session_state.template,
-    )
-if 'memory' not in st.session_state:
-    st.session_state.memory = ConversationBufferMemory(
-        memory_key="history",
-        return_messages=True,
-        input_key="question")
-if 'llm' not in st.session_state:
-        # Specify the model name you want to use
-    model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-    
-    # Load the tokenizer associated with the specified model
+def initialize_llm(model_name):
+    """Initialize the language model pipeline."""
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding=True, truncation=True, max_length=512)
+    tokenizer.padding_side = 'left'
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.add_eos_token = True
     
-    # Define a question-answering pipeline using the model and tokenizer
-    question_answerer = pipeline(
+    qa_pipeline = pipeline(
         "text2text-generation", 
         model=model_name, 
         tokenizer=tokenizer,
         max_new_tokens=512,
-        model_kwargs = {'device_map':"auto"}
-        #return_tensors='pt'
+        model_kwargs={'device_map': 'auto'}
     )
     
-    # Create an instance of the HuggingFacePipeline, which wraps the question-answering pipeline
-    # with additional model-specific arguments (temperature and max_length)
-    llm = HuggingFacePipeline(
-        pipeline=question_answerer,
-        model_kwargs=model_kwargs,
-    )
-    st.session_state.llm = llm
+    return HuggingFacePipeline(pipeline=qa_pipeline, model_kwargs=MODEL_KWARGS)
 
-# Initialize session state
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-
-st.title("PDF Chatbot")
-# Upload a PDF file
-uploaded_file = st.file_uploader("Upload your PDF", type='pdf')
-
-for message in st.session_state.chat_history:
-    with st.chat_message(message["role"]):
-        st.markdown(message["message"])
-
-def read_files(dataset_path, sflag):    
-    onlyfiles = [f for f in os.listdir(dataset_path) if isfile(join(dataset_path, f))]
-    # Create an instance of the RecursiveCharacterTextSplitter class with specific parameters.
-    # It splits text into chunks of 1000 characters each with a 150-character overlap.
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-
-    data = []
-    docs=[]
-
-    for file in onlyfiles:
-        if file.endswith('.pdf'):
-            loader = PyPDFLoader(dataset_path+file)
-            p = loader.load_and_split(text_splitter)
-            if sflag==True:
-                random.shuffle(p)
-            for page in p:
-                docs.append(page)
-    return docs
-
-
+def initialize_session_state():
+    """Initialize Streamlit session state variables."""
+    if 'template' not in st.session_state:
+        st.session_state.template = """
+        You are a knowledgeable chatbot, here to help with user questions. Your tone should be professional and informative.
+        
+        Context: {context}
+        History: {history}
+        
+        User: {question}
+        Chatbot:"""
     
-if uploaded_file is not None:
-    if not os.path.isfile("files/"+uploaded_file.name+".pdf"):
-        with st.status("Analyzing your document..."):
-            docs = read_files(dataset_path, False)
-            # Create and persist the vector store
-            embeddings = load_embeddings(modelPath, model_kwargs, encode_kwargs)
-            st.session_state.vectorstore = FAISS.from_documents(
-                documents = docs, 
-                embeddings = embeddings)
-            st.session_state.vectorstore.persist()
-    st.session_state.retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 4})
-    # Initialize the QA chain
+    if 'prompt' not in st.session_state:
+        st.session_state.prompt = PromptTemplate(
+            input_variables=["history", "context", "question"],
+            template=st.session_state.template
+        )
+    
+    if 'memory' not in st.session_state:
+        st.session_state.memory = ConversationBufferMemory(
+            memory_key="history",
+            return_messages=True,
+            input_key="question"
+        )
+    
+    if 'llm' not in st.session_state:
+        st.session_state.llm = initialize_llm(MODEL_NAME)
+    
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+
+def setup_vectorstore():
+    """Setup FAISS vector store."""
+    embeddings = load_embeddings(MODEL_PATH, MODEL_KWARGS, ENCODE_KWARGS)
+    if os.path.exists(FAISS_INDEX_PATH):
+        st.session_state.vectorstore = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+    else:
+        docs = read_files(DATASET_PATH, shuffle=False)
+        st.session_state.vectorstore = FAISS.from_documents(docs, embeddings)
+        st.session_state.vectorstore.save_local(FAISS_INDEX_PATH)
+    
+    st.session_state.retriever = st.session_state.vectorstore.as_retriever(search_type="similarity", search_kwargs={'k': 3})
     
     if 'qa_chain' not in st.session_state:
         st.session_state.qa_chain = RetrievalQA.from_chain_type(
@@ -144,31 +122,61 @@ if uploaded_file is not None:
             chain_type_kwargs={
                 "verbose": True,
                 "prompt": st.session_state.prompt,
-                "memory": st.session_state.memory,
+                "memory": st.session_state.memory
             }
         )
 
-        # Chat input
-    if user_input := st.chat_input("You:", key="user_input"):
-        user_message = {"role": "user", "message": user_input}
-        st.session_state.chat_history.append(user_message)
-        with st.chat_message("user"):
-            st.markdown(user_input)
-        with st.chat_message("assistant"):
-            with st.spinner("Assistant is typing..."):
-                response = st.session_state.qa_chain(user_input)
-            message_placeholder = st.empty()
-            full_response = ""
-            for chunk in response['result'].split():
-                full_response += chunk + " "
-                time.sleep(0.05)
-                # Add a blinking cursor to simulate typing
-                message_placeholder.markdown(full_response + "▌")
-            message_placeholder.markdown(full_response)
+# Streamlit UI
+st.title("🌟 BDS Chatbot 🌟")
+st.markdown("<h3 style='color:blue;'>Your AI-powered assistant for document analysis</h3>", unsafe_allow_html=True)
 
-        chatbot_message = {"role": "assistant", "message": response['result']}
-        st.session_state.chat_history.append(chatbot_message)
+# Sidebar
+with st.sidebar:
+    st.image('./logo-bds-black.png')
+    st.title('🤗💬 ChatBDS App')
+    st.markdown('''
+    ## 🌟 About
+    This app is a LLM-powered chatbot built using:
+    - [Streamlit](https://streamlit.io/)
+    - [LangChain]
+    - [LLM - Marcoro14-7B]
+    ''')
+    add_vertical_space(2)
+    st.markdown("<h4 style='color:green;'>Made with ❤️ by [ChatBDS Team]</h4>", unsafe_allow_html=True)
 
+# Initialize session state
+initialize_session_state()
 
-else:
-    st.write("Please upload a PDF file.")
+if 'initial' not in st.session_state:
+    st.session_state.initial = True
+
+message_placeholder = st.empty()
+
+if st.session_state.initial:
+    if os.path.isdir(DATASET_PATH):
+        with st.status("🔍 Analyzing your document..."):
+            setup_vectorstore()
+    st.session_state.initial = False
+
+# Chat interaction
+if user_input := st.chat_input("📝 You:"):
+    user_message = {"role": "user", "message": user_input}
+    st.session_state.chat_history.append(user_message)
+    
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    
+    with st.chat_message("assistant"):
+        with st.spinner("🤖 Assistant is typing..."):
+            response = st.session_state.qa_chain(user_input)
+        
+        full_response = ""
+        for chunk in response.get('result', '').strip().split():
+            full_response += chunk + " "
+            time.sleep(0.05)
+            message_placeholder.markdown(full_response + "▌")
+        
+        st.markdown(f"<div style='color:darkblue; font-weight:bold;'>{full_response}</div>", unsafe_allow_html=True)
+    
+    chatbot_message = {"role": "assistant", "message": response.get('result', '').strip()}
+    st.session_state.chat_history.append(chatbot_message)
