@@ -113,8 +113,8 @@ def setup_vectorstore():
     
     st.session_state.retriever = st.session_state.vectorstore.as_retriever(search_type="similarity", search_kwargs={'k': 3})
     
-if 'qa_chain' not in st.session_state:
-    st.session_state.qa_chain = RetrievalQA.from_chain_type(
+    if 'qa_chain' not in st.session_state:
+        st.session_state.qa_chain = RetrievalQA.from_chain_type(
             llm=st.session_state.llm,
             chain_type='stuff',
             retriever=st.session_state.retriever,
