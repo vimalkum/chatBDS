@@ -1,3 +1,5 @@
+python==3.12
+torch
 langchain
 accelerate
 streamlit
@@ -5,3 +7,6 @@ langchain_community
 sentence-transformers
 transformers
 nltk
+numpy
+scipy
+faiss-gpu
